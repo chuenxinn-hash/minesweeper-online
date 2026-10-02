@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<script src="/socket.io/socket.io.js"></script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Minesweeper 95 - Infinite, Daily & Replays</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+* { box-sizing: border-box; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; outline: none; }
+html, body { margin: 0; padding: 0; width: 100%; min-height: 100%; }
+body { background: #008080; font-family: 'Press Start 2P', monospace; padding: 8px; display: flex; justify-content: center; align-items: flex-start; overflow-x: hidden; }
+.win95-window { width: 100%; max-width: 700px; background: #c0c0c0; border-top: 4px solid #dfdfdf; border-left: 4px solid #dfdfdf; border-right: 4px solid #404040; border-bottom: 4px solid #404040; padding: 5px; box-shadow: 5px 5px 12px rgba(0,0,0,.35); }
+.title-bar { height: 35px; background: linear-gradient(90deg,#000080,#1084d0); color: white; display: flex; align-items: center; justify-content: space-between; padding: 4px 7px; font-size: 11px; }
+.title-text { display: flex; align-items: center; gap: 7px; }
+.mine-icon { width: 18px; height: 18px; background: #000; display: flex; align-items: center; justify-content: center; }
+.mine-icon div { width: 8px; height: 8px; background: red; border-radius: 50%; }
+.title-controls { display: flex; gap: 3px; }
+.win-btn { width: 28px; height: 23px; background: #c0c0c0; color: #000; border-top: 2px solid white; border-left: 2px solid white; border-right: 2px solid #404040; border-bottom: 2px solid #404040; display: flex; justify-content: center; align-items: center; font-family: Arial; font-weight: bold; cursor: pointer; }
+.menu-bar { display: flex; gap: 10px; padding: 8px 5px; font-size: 10px; }
+.menu-item { cursor: pointer; padding: 4px 6px; }
+.menu-item:active { border-top: 1px solid #808080; border-left: 1px solid #808080; border-right: 1px solid white; border-bottom: 1px solid white; }
+.game-frame { border-top: 4px solid #808080; border-left: 4px solid #808080; border-right: 4px solid #dfdfdf; border-bottom: 4px solid #dfdfdf; padding: 8px; }
+.header-panel { border-top: 3px solid #808080; border-left: 3px solid #808080; border-right: 3px solid #fff; border-bottom: 3px solid #fff; padding: 8px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.lcd { background: #000; color: red; font-size: 20px; padding: 4px 6px; min-width: 85px; text-align: center; letter-spacing: 2px; }
+.face-btn { width: 42px; height: 42px; background: #c0c0c0; border-top: 3px solid white; border-left: 3px solid white; border-right: 3px solid #808080; border-bottom: 3px solid #808080; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 22px; }
+.board-container { border-top: 3px solid #808080; border-left: 3px solid #808080; border-right: 3px solid white; border-bottom: 3px solid white; background: #808080; overflow: auto; max-height: 65vh; max-width: 100%; -webkit-overflow-scrolling: touch; touch-action: pan-x pan-y; }
+.grid { display: grid; width: max-content; transform-origin: top left; }
+.tile { width: 24px; height: 24px; background: #c0c0c0; border-top: 3px solid white; border-left: 3px solid white; border-right: 3px solid #808080; border-bottom: 3px solid #808080; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: bold; flex-shrink: 0; cursor: pointer; touch-action: auto; }
+.tile.revealed { border: 1px solid #888; background: #c0c0c0; }
+.tile.flagged { background: #c0c0c0; }
+.mine-hit { background: red !important; }
+.mine-svg { width: 16px; height: 16px; }
+.n-1 { color: #0000ff; } .n-2 { color: #008000; } .n-3 { color: #ff0000; } .n-4 { color: #000080; } .n-5 { color: #800000; } .n-6 { color: #008080; } .n-7 { color: #000000; } .n-8 { color: #808080; }
+.control-bar { margin-top: 8px; padding: 7px; display: flex; justify-content: space-between; align-items: center; background: #d4d0c8; border-top: 2px solid white; border-left: 2px solid white; border-right: 2px solid #808080; border-bottom: 2px solid #808080; font-size: 8px; }
+.zoom-group { display: flex; align-items: center; gap: 5px; }
+.action-mode-btn { padding: 3px 6px; background: #c0c0c0; border-top: 2px solid white; border-left: 2px solid white; border-right: 2px solid #404040; border-bottom: 2px solid #404040; cursor: pointer; font-family: 'Press Start 2P', monospace; font-size: 7px; }
+.action-mode-btn.active-flag { background: #dfdfdf; border-top: 2px solid #404040; border-left: 2px solid #404040; border-right: 2px solid white; border-bottom: 2px solid white; }
+.zoom-btn { width: 28px; height: 25px; background: #c0c0c0; border-top: 2px solid white; border-left: 2px solid white; border-right: 2px solid #404040; border-bottom: 2px solid #404040; display: flex; justify-content: center; align-items: center; cursor: pointer; }
+.screen { display: none; }
+.screen.active { display: block; }
+.main-menu { padding: 20px 15px; text-align: center; }
+.logo { font-size: 20px; margin-bottom: 20px; }
+.menu-button { width: 90%; max-width: 400px; margin: 10px auto; padding: 15px 10px; background: #c0c0c0; border-top: 4px solid white; border-left: 4px solid white; border-right: 4px solid #404040; border-bottom: 4px solid #404040; font-family: 'Press Start 2P', monospace; font-size: 11px; cursor: pointer; }
+.menu-button:active { border-top: 4px solid #404040; border-left: 4px solid #404040; border-right: 4px solid white; border-bottom: 4px solid white; }
+.difficulty-screen { padding: 20px 10px; text-align: center; }
+.back-button { margin: 5px; padding: 10px; background: #c0c0c0; border-top: 3px solid white; border-left: 3px solid white; border-right: 4px solid #404040; border-bottom: 4px solid #404040; font-family: 'Press Start 2P'; font-size: 9px; cursor: pointer; }
+.help { font-size: 9px; line-height: 2; padding: 15px; }
+.leaderboard { text-align: left; font-size: 9px; line-height: 2; margin: 15px 5px; max-height: 50vh; overflow-y: auto; }
+.leader-section { border-top: 2px solid white; border-left: 2px solid white; border-right: 2px solid #808080; border-bottom: 2px solid #808080; padding: 10px; margin-bottom: 12px; }
+.leader-section h4 { text-align: center; margin-top: 0; }
+.profile-card { border-top: 2px solid white; border-left: 2px solid white; border-right: 2px solid #808080; border-bottom: 2px solid #808080; padding: 12px; margin-bottom: 15px; display: flex; align-items: center; gap: 15px; background: #d4d0c8; text-align: left; }
+.profile-avatar { width: 50px; height: 50px; border: 2px solid #404040; background: #fff; object-fit: cover; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+.profile-info { font-size: 9px; line-height: 1.6; flex-grow: 1; }
+.search-box { margin-top: 10px; display: flex; gap: 5px; justify-content: center; }
+.search-input { padding: 8px; font-family: 'Press Start 2P', monospace; font-size: 9px; border: 2px solid #404040; background: #fff; width: 65%; }
+.modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; z-index: 9999; padding: 15px; }
+.modal-bg.show { display: flex; }
+.modal { width: 100%; max-width: 430px; background: #c0c0c0; border-top: 4px solid white; border-left: 4px solid white; border-right: 4px solid #404040; border-bottom: 4px solid #404040; padding: 5px; }
+.modal-title { background: #000080; color: white; padding: 8px; font-size: 10px; }
+.modal-content { padding: 18px 12px; text-align: center; font-size: 9px; line-height: 1.8; }
+.modal-buttons { display: flex; flex-direction: column; gap: 9px; padding: 10px; }
+.modal-button { padding: 12px; background: #c0c0c0; border-top: 3px solid white; border-left: 3px solid white; border-right: 4px solid #404040; border-bottom: 4px solid #404040; font-family: 'Press Start 2P', monospace; font-size: 9px; cursor: pointer; }
+.modal-input { width: 90%; padding: 8px; font-family: 'Press Start 2P', monospace; font-size: 9px; margin-top: 10px; border: 2px solid #404040; background: #fff; text-align: center; }
+@media(max-width:430px) { body { padding: 3px; } .win95-window { max-width: 100%; } .lcd { font-size: 16px; min-width: 75px; } .tile { width: 22px; height: 22px; } .logo { font-size: 17px; } }
+</style>
+</head>
+<body>
+<div class="win95-window">
+<div class="title-bar">
+    <div class="title-text"><div class="mine-icon"><div></div></div>Minesweeper Online</div>
+    <div class="title-controls"><div class="win-btn">_</div><div class="win-btn">□</div><div class="win-btn" onclick="requestExit()">X</div></div>
+</div>
+<div id="mainScreen" class="screen active">
+    <div class="main-menu">
+        <div class="logo">MINESWEEPER</div>
+        <div class="profile-card">
+            <img id="myAvatarImg" class="profile-avatar" src="" alt="Avatar">
+            <div class="profile-info">
+                <div>NAME: <strong id="myProfileName">Player</strong></div>
+                <div style="margin-top:5px;"><span style="cursor:pointer; color:#000080; text-decoration:underline;" onclick="openEditProfile()">[Edit Profile]</span></div>
+            </div>
+        </div>
+        <div class="menu-button" onclick="showClassic()">CLASSIC</div>
+        <div class="menu-button" onclick="startEndless(false)">NEW INFINITE ENDLESS</div>
+        <div class="menu-button" id="continueEndlessBtn" style="display:none;" onclick="startEndless(true)">CONTINUE ENDLESS</div>
+        <div class="menu-button" onclick="startDailyChallenge()">DAILY SEED CHALLENGE</div>
+        <div class="menu-button" onclick="showFriends()">FRIENDS</div>
+        <div class="menu-button" onclick="showLeaderboard()">GLOBAL LEADERBOARD</div>
+        <div class="search-box">
+            <input type="text" id="searchInput" class="search-input" placeholder="Search player...">
+            <div class="menu-button" style="margin:0; padding:8px 10px; font-size:8px;" onclick="searchPlayer()">SEARCH</div>
+        </div>
+        <div class="menu-button" onclick="showHelp()">HELP</div>
+    </div>
+</div>
+<div id="difficultyScreen" class="screen">
+    <div class="difficulty-screen">
+        <h3>CLASSIC</h3>
+        <div class="menu-button" onclick="startClassic('beginner')">BEGINNER</div>
+        <div class="menu-button" onclick="startClassic('intermediate')">INTERMEDIATE</div>
+        <div class="menu-button" onclick="startClassic('extreme')">EXTREME</div>
+        <button class="back-button" onclick="showMainMenu()">BACK</button>
+    </div>
+</div>
+<div id="gameScreen" class="screen">
+    <div class="menu-bar">
+        <span class="menu-item" onclick="requestExit()">Game</span>
+        <span class="menu-item" onclick="newCurrentGame()">New Game</span>
+        <span class="menu-item" onclick="showHelp()">Help</span>
+    </div>
+    <div class="game-frame">
+        <div class="header-panel">
+            <div id="mineCount" class="lcd">000</div>
+            <div id="face" class="face-btn" onclick="newCurrentGame()">🙂</div>
+            <div id="timer" class="lcd">000</div>
+        </div>
+        <div id="boardContainer" class="board-container"><div id="grid" class="grid"></div></div>
+        <div class="control-bar">
+            <span id="modeText">Windows 95 Classic</span>
+            <div class="zoom-group">
+                <div id="actionModeBtn" class="action-mode-btn" onclick="toggleActionMode()">⛏️ DIG</div>
+                <span>Zoom:</span>
+                <div class="zoom-btn" onclick="changeZoom(-0.1)">−</div>
+                <span id="zoomText">100%</span>
+                <div class="zoom-btn" onclick="changeZoom(0.1)">+</div>
+                <div class="zoom-btn" onclick="fitScreen()">FIT</div>
+            </div>
+        </div>
+    </div>
+</div>
+<div id="leaderboardScreen" class="screen">
+    <div class="difficulty-screen">
+        <h3>GLOBAL LEADERBOARD</h3>
+        <div id="leaderboardContent" class="leaderboard">Loading global scores...</div>
+        <button class="back-button" onclick="showMainMenu()">BACK</button>
+    </div>
+</div>
+<div id="helpScreen" class="screen">
+    <div class="help">
+        <h3>HELP</h3>
+        <p>TAP → Reveal a tile</p>
+        <p>HOLD 0.4s → Flag / Unflag</p>
+        <p>HOLD NUMBER → Chord</p>
+        <p>DAILY CHALLENGE: Same seed worldwide every 24 hours!</p>
+        <p>GHOST REPLAYS: Watch top players' moves in the leaderboard!</p>
+        <button class="back-button" onclick="goBackFromHelp()">BACK</button>
+    </div>
+</div>
+<div id="friendsScreen" class="screen">
+    <div class="difficulty-screen">
+        <h3>FRIENDS</h3>
+        <div style="margin-bottom:10px;">
+            <input type="text" id="friendSearchInput" class="search-input" placeholder="Search player to add...">
+            <div class="menu-button" style="margin:5px auto; padding:8px 10px; font-size:8px; width:65%;" onclick="addFriend()">ADD FRIEND</div>
+        </div>
+        <div id="friendsListContent" class="leaderboard" style="max-height:40vh;">No friends added yet.</div>
+        <button class="back-button" onclick="showMainMenu()">BACK</button>
+    </div>
+</div>
+</div>
+<div id="modalBg" class="modal-bg">
+    <div class="modal">
+        <div id="modalTitle" class="modal-title">Minesweeper</div>
+        <div id="modalContent" class="modal-content"></div>
+        <div id="modalButtons" class="modal-buttons"></div>
+    </div>
+</div>
+<script>
+let socket = io();
+let myProfile = JSON.parse(localStorage.getItem("minesweeper_profile") || JSON.stringify({
+    name: "Player" + Math.floor(Math.random()*900 + 100),
+    avatar: ""
+}));
+const mineSvgHtml = '<svg class="mine-svg" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg"><path d="M7 0h2v16H7zM0 7h16v2H0zM2 3h12v2H2zM3 2h2v12H3zM11 2h2v12h-2z" fill="#000"/><path d="M4 4h8v8H4z" fill="#000"/><path d="M6 6h4v4H6z" fill="#fff"/></svg>';
+
+function saveMyProfile() {
+    localStorage.setItem("minesweeper_profile", JSON.stringify(myProfile));
+    const nameEl = document.getElementById("myProfileName");
+    if (nameEl) nameEl.textContent = myProfile.name;
+    const avImg = document.getElementById("myAvatarImg");
+    if (avImg) {
+        avImg.src = myProfile.avatar || "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='50' height='50'><rect width='50' height='50' fill='%23c0c0c0'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-size='24'>👤</text></svg>";
+    }
+    socket.emit('update_presence', myProfile);
+    checkSavedEndless();
+}
+
+function checkSavedEndless() {
+    const saved = localStorage.getItem("minesweeper_endless_save");
+    const btn = document.getElementById("continueEndlessBtn");
+    if (btn) btn.style.display = saved ? "block" : "none";
+}
+
+function openEditProfile() {
+    showModal("EDIT PROFILE", `
+        Change Name:<br>
+        <input type="text" id="editName" class="modal-input" value="${myProfile.name}" maxlength="12"><br><br>
+        Upload Avatar:<br>
+        <input type="file" id="editAvatarFile" class="modal-input" accept="image/*">
+    `, [
+        {
+            text: "SAVE PROFILE",
+            action: function() {
+                const nameInput = document.getElementById("editName");
+                if (nameInput && nameInput.value.trim()) myProfile.name = nameInput.value.trim();
+                const fileInput = document.getElementById("editAvatarFile");
+                if (fileInput && fileInput.files && fileInput.files[0]) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        myProfile.avatar = e.target.result;
+                        saveMyProfile();
+                        closeModal();
+                    };
+                    reader.readAsDataURL(fileInput.files[0]);
+                } else {
+                    saveMyProfile();
+                    closeModal();
+                }
+            }
+        },
+        { text: "CANCEL", action: closeModal }
+    ]);
+}
+
+let cachedLeaderboardData = {};
+socket.on('leaderboard_data', (data) => {
+    cachedLeaderboardData = data;
+});
+socket.emit('get_leaderboard');
+
+async function submitGlobalScore(category, scoreData, replayActions = []) {
+    socket.emit('submit_score', { category, scoreData: { name: myProfile.name, avatar: myProfile.avatar, ...scoreData, date: new Date().toLocaleDateString() } });
+}
+
+function searchPlayer() {
+    const searchInput = document.getElementById("searchInput");
+    const query = searchInput ? searchInput.value.trim().toLowerCase() : "";
+    if (!query) return;
+    let profiles = cachedLeaderboardData.profiles || {};
+    let foundName = Object.keys(profiles).find(n => n.toLowerCase() === query || n.toLowerCase().includes(query));
+    if (!foundName) {
+        showModal("PLAYER SEARCH", "Player not found in global records.", [{ text: "OK", action: closeModal }]);
+        return;
+    }
+    showModal("PLAYER PROFILE", `<div style="text-align:center;"><strong>${foundName}</strong></div>`, [{ text: "CLOSE", action: closeModal }]);
+}
+
+function start1v1Battle(seed, level, seedName) {
+    mode = "battle";
+    difficulty = level;
+    ROWS = difficulties[level].rows;
+    COLS = difficulties[level].cols;
+    MINES = difficulties[level].mines;
+    flagCount = MINES;
+    currentSeed = seed;
+    hideScreens();
+    document.getElementById("gameScreen").classList.add("active");
+    document.getElementById("modeText").textContent = "1v1 Battle [" + seedName + "]";
+    stopTimer();
+    board = [];
+    revealedCount = 0;
+    firstClick = false;
+    gameOver = false;
+    gameWon = false;
+    timer = 0;
+    currentReplayActions = [];
+    isReplaying = false;
+    if (timerEl) timerEl.textContent = "000";
+    updateMineCounter();
+    if (face) face.textContent = "🙂";
+    createBoard();
+    placeMinesSeeded(currentSeed);
+    startTimer();
+    fitScreen();
+}
+
+let myFriends = JSON.parse(localStorage.getItem("minesweeper_friends") || "[]");
+
+function showFriends() {
+    hideScreens();
+    document.getElementById("friendsScreen").classList.add("active");
+    renderFriendsList();
+}
+
+function addFriend() {
+    const input = document.getElementById("friendSearchInput");
+    const query = input ? input.value.trim() : "";
+    if (!query || myFriends.includes(query) || query === myProfile.name) return;
+    myFriends.push(query);
+    localStorage.setItem("minesweeper_friends", JSON.stringify(myFriends));
+    input.value = "";
+    renderFriendsList();
+}
+
+function removeFriend(name) {
+    myFriends = myFriends.filter(f => f !== name);
+    localStorage.setItem("minesweeper_friends", JSON.stringify(myFriends));
+    renderFriendsList();
+}
+
+function challengeFriend(friendName) {
+    showModal("CHALLENGE FRIEND", `Send 1v1 challenge to <strong>${friendName}</strong>?`, [
+        {
+            text: "SEND",
+            action: function() {
+                let roomSeed = Math.floor(Math.random()*90000 + 10000);
+                socket.emit('send_challenge', { targetFriend: friendName, challengeData: { challenger: myProfile.name, seed: roomSeed, level: 'intermediate' } });
+                closeModal();
+                showModal("SENT", "Challenge sent!", [{ text: "OK", action: closeModal }]);
+            }
+        },
+        { text: "CANCEL", action: closeModal }
+    ]);
+}
+
+socket.on('challenge_received', ({ target, challenge }) => {
+    if (target === myProfile.name) {
+        showModal("INCOMING CHALLENGE!", `<strong>${challenge.challenger}</strong> challenged you!`, [
+            { text: "ACCEPT", action: () => { closeModal(); start1v1Battle(challenge.seed, challenge.level, "vs " + challenge.challenger); } },
+            { text: "DECLINE", action: closeModal }
+        ]);
+    }
+});
+
+function renderFriendsList() {
+    const container = document.getElementById("friendsListContent");
+    if (!container) return;
+    if (myFriends.length === 0) {
+        container.innerHTML = "<div>No friends added yet.</div>";
+        return;
+    }
+    let html = "";
+    myFriends.forEach(f => {
+        html += `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; padding:6px; background:#c0c0c0; border:1px solid #404040;">
+            <div><strong>${f}</strong></div>
+            <div style="display:flex; gap:4px;">
+                <button class="back-button" style="margin:0; padding:4px 6px; font-size:7px;" onclick="challengeFriend('${f}')">1v1</button>
+                <button class="back-button" style="margin:0; padding:4px 6px; font-size:7px; background:#e0a0a0;" onclick="removeFriend('${f}')">X</button>
+            </div>
+        </div>`;
+    });
+    container.innerHTML = html;
+}
+
+const difficulties = { beginner: { rows: 9, cols: 9, mines: 10 }, intermediate: { rows: 16, cols: 16, mines: 40 }, extreme: { rows: 30, cols: 16, mines: 99 }, daily: { rows: 16, cols: 16, mines: 40 } };
+let mode = "classic", difficulty = "intermediate", ROWS = 16, COLS = 16, MINES = 40, board = [], revealedCount = 0, flagCount = 40, firstClick = true, gameOver = false, gameWon = false, timer = 0, timerInterval = null, zoom = 1, currentSeed = null, currentReplayActions = [], currentMinePositions = [], isReplaying = false, clickMode = 'dig';
+
+function toggleActionMode() {
+    clickMode = clickMode === 'dig' ? 'flag' : 'dig';
+    const btn = document.getElementById("actionModeBtn");
+    if (btn) {
+        btn.innerHTML = clickMode === 'flag' ? '⚑ FLAG' : '⛏️ DIG';
+        btn.classList.toggle('active-flag', clickMode === 'flag');
+    }
+}
+
+function getDailySeedNumber() {
+    const d = new Date();
+    return parseInt("" + d.getUTCFullYear() + String(d.getUTCMonth()+1).padStart(2,'0') + String(d.getUTCDate()).padStart(2,'0'), 10);
+}
+function seededRandom(seed) { let x = Math.sin(seed++) * 10000; return x - Math.floor(x); }
+
+const grid = document.getElementById("grid"), mineCount = document.getElementById("mineCount"), timerEl = document.getElementById("timer"), face = document.getElementById("face"), boardContainer = document.getElementById("boardContainer");
+
+function hideScreens() { closeModal(); document.querySelectorAll(".screen").forEach(s => s.classList.remove("active")); }
+function showMainMenu() { stopTimer(); hideScreens(); saveMyProfile(); document.getElementById("mainScreen").classList.add("active"); }
+function showClassic() { hideScreens(); document.getElementById("difficultyScreen").classList.add("active"); }
+function showHelp() { hideScreens(); document.getElementById("helpScreen").classList.add("active"); }
+function goBackFromHelp() { if (['classic', 'endless', 'daily'].includes(mode)) { hideScreens(); document.getElementById("gameScreen").classList.add("active"); } else { showMainMenu(); } }
+
+function startClassic(level) { mode = "classic"; difficulty = level; ROWS = difficulties[level].rows; COLS = difficulties[level].cols; MINES = difficulties[level].mines; flagCount = MINES; hideScreens(); document.getElementById("gameScreen").classList.add("active"); initGame(); }
+function startDailyChallenge() { mode = "daily"; difficulty = "daily"; ROWS = 16; COLS = 16; MINES = 40; flagCount = 40; currentSeed = getDailySeedNumber(); hideScreens(); document.getElementById("gameScreen").classList.add("active"); initGame(); }
+function startEndless(continueGame = false) { mode = "endless"; difficulty = "endless"; hideScreens(); document.getElementById("gameScreen").classList.add("active"); if (continueGame && localStorage.getItem("minesweeper_endless_save")) { loadEndlessGame(); } else { ROWS = 25; COLS = 25; initEndlessBoard(); } }
+
+function initEndlessBoard() { stopTimer(); board = []; revealedCount = 0; firstClick = true; gameOver = false; gameWon = false; timer = 0; flagCount = 0; createBoard(); fitScreen(); }
+function saveEndlessGame() { if (mode !== "endless" || gameOver) return; localStorage.setItem("minesweeper_endless_save", JSON.stringify({ ROWS, COLS, timer, revealedCount, board })); checkSavedEndless(); }
+function loadEndlessGame() { let s = JSON.parse(localStorage.getItem("minesweeper_endless_save")); if(!s) { initEndlessBoard(); return; } ROWS=s.ROWS; COLS=s.COLS; timer=s.timer; revealedCount=s.revealedCount; board=s.board; firstClick=false; createBoard(); render(); startTimer(); fitScreen(); }
+
+function initGame() { stopTimer(); board = []; revealedCount = 0; firstClick = (mode !== 'daily'); gameOver = false; gameWon = false; timer = 0; flagCount = MINES; createBoard(); if (mode === 'daily') { placeMinesSeeded(currentSeed); startTimer(); } fitScreen(); }
+
+function createBoard() {
+    grid.innerHTML = "";
+    grid.style.gridTemplateColumns = `repeat(${COLS},24px)`;
+    grid.style.gridTemplateRows = `repeat(${ROWS},24px)`;
+    for (let r = 0; r < ROWS; r++) {
+        if (!board[r]) board[r] = [];
+        for (let c = 0; c < COLS; c++) {
+            if (!board[r][c]) board[r][c] = { mine: false, revealed: false, flagged: false, count: 0 };
+            createTile(r, c);
+        }
+    }
+}
+
+function createTile(r, c) {
+    const tile = document.createElement("div");
+    tile.className = "tile";
+    let holdTimer = null, moved = false, startX = 0, startY = 0;
+    tile.addEventListener("contextmenu", e => e.preventDefault());
+    tile.addEventListener("pointerdown", e => {
+        if (gameOver || gameWon) return;
+        moved = false; startX = e.clientX; startY = e.clientY;
+        holdTimer = setTimeout(() => {
+            if (moved || gameOver) return;
+            if (board[r][c].revealed) { if (board[r][c].count > 0) chordCell(r, c); } else { toggleFlag(r, c); }
+            holdTimer = null;
+        }, 400);
+    });
+    tile.addEventListener("pointermove", e => { if (Math.abs(e.clientX - startX) > 8 || Math.abs(e.clientY - startY) > 8) { moved = true; if (holdTimer) clearTimeout(holdTimer); } });
+    tile.addEventListener("pointerup", e => {
+        if (holdTimer) clearTimeout(holdTimer);
+        if (moved || gameOver) return;
+        if (clickMode === 'flag') { if (board[r][c].revealed) chordCell(r, c); else toggleFlag(r, c); } else { handleTileClick(r, c); }
+    });
+    grid.appendChild(tile);
+}
+
+function placeMinesSeeded(seed) {
+    let placed = 0, s = seed; currentMinePositions = [];
+    while (placed < MINES) {
+        s++; let r = Math.floor(seededRandom(s) * ROWS);
+        s++; let c = Math.floor(seededRandom(s) * COLS);
+        if (!board[r][c].mine) { board[r][c].mine = true; currentMinePositions.push({r, c}); placed++; }
+    }
+    calculateNumbers();
+}
+
+function placeMines(safeR, safeC) {
+    let toPlace = mode === 'endless' ? Math.floor(ROWS * COLS * 0.15) : MINES, placed = 0; currentMinePositions = [];
+    while (placed < toPlace) {
+        let r = Math.floor(Math.random() * ROWS), c = Math.floor(Math.random() * COLS);
+        if (!board[r][c].mine && Math.abs(r - safeR) > 1 || Math.abs(c - safeC) > 1) { board[r][c].mine = true; currentMinePositions.push({r, c}); placed++; }
+    }
+    calculateNumbers();
+}
+
+function calculateNumbers() {
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            if (board[r][c].mine) continue;
+            let count = 0;
+            for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+                let nr = r + dr, nc = c + dc;
+                if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && board[nr][nc].mine) count++;
+            }
+            board[r][c].count = count;
+        }
+    }
+}
+
+function handleTileClick(r, c) {
+    const cell = board[r][c];
+    if (cell.revealed || cell.flagged) return;
+    if (firstClick && mode !== 'daily' && mode !== 'battle') { firstClick = false; placeMines(r, c); startTimer(); }
+    if (cell.mine) { cell.revealed = true; revealAllMines(); render(); triggerLose(); return; }
+    revealCell(r, c);
+    render();
+    if (mode === "classic" && revealedCount >= ROWS * COLS - MINES) triggerWin();
+}
+
+function revealCell(r, c) {
+    if (r < 0 || r >= ROWS || c < 0 || c >= COLS) return;
+    const cell = board[r][c];
+    if (cell.revealed || cell.flagged || cell.mine) return;
+    cell.revealed = true; revealedCount++;
+    if (cell.count === 0) { for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) revealCell(r + dr, c + dc); }
+}
+
+function chordCell(r, c) {
+    const cell = board[r][c]; let flags = 0;
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+        let nr = r + dr, nc = c + dc; if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && board[nr][nc].flagged) flags++;
+    }
+    if (flags !== cell.count) return;
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+        let nr = r + dr, nc = c + dc; if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+            if (board[nr][nc].mine) { revealAllMines(); render(); triggerLose(); return; }
+            revealCell(nr, nc);
+        }
+    }
+    render();
+}
+
+function toggleFlag(r, c) {
+    const cell = board[r][c]; if (cell.revealed) return;
+    cell.flagged = !cell.flagged;
+    flagCount += cell.flagged ? -1 : 1;
+    updateMineCounter();
+    render();
+}
+
+function render() {
+    const tiles = grid.children;
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+        const tile = tiles[r * COLS + c]; if (!tile) continue;
+        const cell = board[r][c]; tile.className = "tile"; tile.innerHTML = "";
+        if (cell.revealed) {
+            tile.classList.add("revealed");
+            if (cell.mine) { tile.classList.add("mine-hit"); tile.innerHTML = mineSvgHtml; }
+            else if (cell.count > 0) { tile.textContent = cell.count; tile.classList.add(`n-${cell.count}`); }
+        } else if (cell.flagged) { tile.classList.add("flagged"); tile.innerHTML = '<span style="color:red;font-size:17px;">⚑</span>'; }
+    }
+}
+
+function revealAllMines() { for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (board[r][c].mine) board[r][c].revealed = true; }
+function startTimer() { stopTimer(); timerInterval = setInterval(() => { if (timer < 999) timer++; timerEl.textContent = String(timer).padStart(3,"0"); }, 1000); }
+function stopTimer() { if (timerInterval) clearInterval(timerInterval); timerInterval = null; }
+
+function triggerWin() { gameOver = true; stopTimer(); face.textContent = "😎"; showModal("YOU WIN!", `Time: ${timer}s`, [{ text: "MENU", action: showMainMenu }]); }
+function triggerLose() { gameOver = true; stopTimer(); face.textContent = "😵"; showModal("GAME OVER", `BOOM!`, [{ text: "MENU", action: showMainMenu }]); }
+
+function newCurrentGame() { closeModal(); if (mode === "classic") startClassic(difficulty); else if (mode === "daily") startDailyChallenge(); else showFriends(); }
+function requestExit() { showModal("EXIT", "Leave game?", [{ text: "MENU", action: showMainMenu }]); }
+
+function showLeaderboard() {
+    hideScreens();
+    document.getElementById("leaderboardScreen").classList.add("active");
+    let html = "";
+    ["beginner", "intermediate", "extreme"].forEach(cat => {
+        html += `<div class="leader-section"><h4>${cat.toUpperCase()}</h4>`;
+        let list = cachedLeaderboardData[cat] || [];
+        if (list.length === 0) html += `<div>No scores yet.</div>`;
+        list.forEach((s, i) => html += `<div>${i+1}. ${s.name} - ${s.time}s</div>`);
+        html += `</div>`;
+    });
+    document.getElementById("leaderboardContent").innerHTML = html;
+}
+
+function showModal(title, content, buttons) {
+    document.getElementById("modalTitle").textContent = title;
+    document.getElementById("modalContent").innerHTML = content;
+    let box = document.getElementById("modalButtons"); box.innerHTML = "";
+    buttons.forEach(b => {
+        let el = document.createElement("div"); el.className = "modal-button"; el.textContent = b.text; el.onclick = b.action; box.appendChild(el);
+    });
+    document.getElementById("modalBg").classList.add("show");
+}
+function closeModal() { document.getElementById("modalBg").classList.remove("show"); }
+function updateMineCounter() { mineCount.textContent = String(Math.max(0, flagCount)).padStart(3,"0"); }
+function changeZoom(amt) { zoom = Math.max(0.6, Math.min(2, zoom + amt)); grid.style.transform = `scale(${zoom})`; document.getElementById("zoomText").textContent = Math.round(zoom * 100) + "%"; }
+function fitScreen() { zoom = Math.max(0.6, Math.min(1, (boardContainer.clientWidth - 8) / (COLS * 24))); grid.style.transform = `scale(${zoom})`; document.getElementById("zoomText").textContent = Math.round(zoom * 100) + "%"; }
+
+window.addEventListener("DOMContentLoaded", () => { saveMyProfile(); showMainMenu(); });
+</script>
+</body>
+</html>
